@@ -1,4 +1,6 @@
 Renoise {
+	classvar <numInstances = 0;
+
 	var <ip, <port, <>jackName;
 	var <netAddr;
 
@@ -7,13 +9,46 @@ Renoise {
 	var <>midiOnFuncs, <>midiOffFuncs;
 	var <>monophonicSynths, <>polyphonicSynths;
 
+	*initClass {
+		Event.addEventType(\renoise, { |server|
+			var notes = [~midinote.value, ~ctranspose.value, ~velocity.value, ~sustain.value, ~lag.value, ~timingOffset.value, ~instr.value, ~track.value].flop;
+			var timeNoteOn, timeNoteOff, instrument, track, velocity;
+			var serverLatency;
+
+			serverLatency = server.latency ? 0;
+
+			// todo: should check global ~renoise variable is defined
+
+			notes.do {|note|
+				instrument = note[6] ? -1;
+				track = note[7] ? -1;
+				velocity = note[2].asInteger.clip(0,127);
+
+				// sustain and timingOffset are in beats, lag is in seconds
+				timeNoteOn = (thisThread.clock.tempo.reciprocal*note[5])+note[4]+server.latency;
+				timeNoteOff = (thisThread.clock.tempo.reciprocal*(note[3]+note[5]))+note[4]+server.latency;
+
+				SystemClock.sched(timeNoteOn, {
+					~renoise.sendMsg("/renoise/trigger/note_on", instrument.asInteger, track.asInteger, (note[0]+note[1]).asInteger, velocity );
+				});
+
+				SystemClock.sched(timeNoteOff, {
+					~renoise.sendMsg("/renoise/trigger/note_off", instrument.asInteger, track.asInteger, (note[0]+note[1]).asInteger);
+				});
+			}
+		});
+	}
+
 	*new { arg ip = "127.0.0.1", port = 8000, jackName = "renoise";
-		^super.newCopyArgs(ip, port, jackName).init;
+		var instance = super.newCopyArgs(ip, port, jackName);
+		numInstances = numInstances + 1;
+		instance.init();
+		^instance;
 	}
 
 	init {
 		netAddr = NetAddr(ip, port);
-		
+
 		usedMidiChannels = 0;
 
 		midiOnFuncs = IdentityDictionary();
@@ -21,6 +56,31 @@ Renoise {
 
 		monophonicSynths = IdentityDictionary();
 		polyphonicSynths = IdentityDictionary();
+
+		if (Renoise.numInstances == 1, {
+			this.makeDefault();
+		});
+
+		CmdPeriod.add { this.deinit(); }
+	}
+
+	deinit {
+		this.editMode = false;
+		this.stop;
+	}
+
+	makeDefault {
+		if (Main.versionAtLeast( 3, 9 )) {
+		    Event.addParentType(\renoise, (renoise: this));
+		};
+		// todo: do we need to throw an error?
+	}
+
+	connect { |deviceName, portName, forceInit = false|
+		if (MIDIClient.initialized == false || forceInit, {
+			MIDIClient.init;
+		});
+		MIDIIn.connectAll;
 	}
 
 	ip_ { arg newIp;
@@ -280,6 +340,10 @@ Renoise {
 	// -----------------------------
 	// Standard renoise OSC messages
 	// -----------------------------
+
+	sendMsg { arg ... args;
+		netAddr.sendMsg(*args);
+	}
 
 	// Evaluate a custom Lua expression,
 	evaluate { arg luaExpression;
