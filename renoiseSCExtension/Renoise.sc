@@ -54,10 +54,10 @@ Renoise {
 			this.makeDefault();
 		});
 
-		CmdPeriod.add { this.deinit(); }
+		CmdPeriod.add { this.stopAll(); }
 	}
 
-	deinit {
+	stopAll {
 		this.stopRecording;
 	}
 
@@ -68,11 +68,11 @@ Renoise {
 		// todo: do we need to throw an error?
 	}
 
-	connect { |deviceName, portName, forceInit = false|
+	connect { |forceInit = false|
 		if (MIDIClient.initialized == false || forceInit, {
-			MIDIClient.init;
+			MIDIClient.init(verbose: false);
+			MIDIIn.connectAll(false);
 		});
-		MIDIIn.connectAll;
 	}
 
 	ip_ { arg newIp;
@@ -363,7 +363,7 @@ Renoise {
 		netAddr.sendMsg("/renoise/transport/stop");
 	}
 
-	record { arg duration, latency;
+	record { arg duration, latency, clock, callback;
 		this.editMode = true;
 		latency = latency ? (Server.default.latency-0.03);
 		this.sendMsgIn(latency, "/renoise/transport/start");
@@ -371,7 +371,8 @@ Renoise {
 			{
 				(duration + latency).wait;
 				this.stopRecording;
-			}.fork;
+				callback.value;
+			}.fork(clock ? TempoClock.default);
 		};
 	}
 
