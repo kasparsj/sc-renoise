@@ -365,10 +365,11 @@ Renoise {
 
 	record { arg duration, latency;
 		this.editMode = true;
-		this.sendMsgIn(latency ? (Server.default.latency-0.03), "/renoise/transport/start");
+		latency = latency ? (Server.default.latency-0.03);
+		this.sendMsgIn(latency, "/renoise/transport/start");
 		if (duration != nil) {
 			{
-				duration.wait;
+				(duration + latency).wait;
 				this.stopRecording;
 			}.fork;
 		};
@@ -536,6 +537,7 @@ Renoise {
 		netAddr.sendMsg("/renoise/song/track/" ++ track ++ "/solo");
 	}
 
+	// requires custom GlobalOscActions.lua
 	patternLength_ { arg numLines;
 		netAddr.sendMsg("/renoise/song/pattern/length", numLines);
 	}
