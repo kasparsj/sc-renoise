@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<RenoiseScriptingTool doc_version="0">
+  <ApiVersion>6.1</ApiVersion>
+  <Id>uk.tristanstrange.SupercolliderIntegration</Id>
+  <Version>1</Version>
+  <Author>triss</Author>
+  <Name>SuperCollider Integration</Name>
+  <Category>Networking</Category>
+  <Description>Sends OSC messages to SuperCollider</Description>
+  <Homepage>https://github.com/triss/sc-renoise</Homepage>
+</RenoiseScriptingTool>

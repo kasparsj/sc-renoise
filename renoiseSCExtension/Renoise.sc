@@ -13,9 +13,7 @@ Renoise {
 		Event.addEventType(\renoise, { |server|
 			var notes = [~midinote.value, ~ctranspose.value, ~velocity.value, ~sustain.value, ~lag.value, ~timingOffset.value, ~instr.value, ~track.value].flop;
 			var timeNoteOn, timeNoteOff, instrument, track, velocity;
-			var serverLatency;
-
-			serverLatency = server.latency ? 0;
+			var serverLatency = ~latency.value ? (server.latency ? 0);
 
 			// todo: should check global ~renoise variable is defined
 
@@ -25,16 +23,11 @@ Renoise {
 				velocity = note[2].asInteger.clip(0,127);
 
 				// sustain and timingOffset are in beats, lag is in seconds
-				timeNoteOn = (thisThread.clock.tempo.reciprocal*note[5])+note[4]+server.latency;
-				timeNoteOff = (thisThread.clock.tempo.reciprocal*(note[3]+note[5]))+note[4]+server.latency;
+				timeNoteOn = (thisThread.clock.tempo.reciprocal*note[5])+note[4]+serverLatency;
+				timeNoteOff = (thisThread.clock.tempo.reciprocal*(note[3]+note[5]))+note[4]+serverLatency;
 
-				SystemClock.sched(timeNoteOn, {
-					~renoise.sendMsg("/renoise/trigger/note_on", instrument.asInteger, track.asInteger, (note[0]+note[1]).asInteger, velocity );
-				});
-
-				SystemClock.sched(timeNoteOff, {
-					~renoise.sendMsg("/renoise/trigger/note_off", instrument.asInteger, track.asInteger, (note[0]+note[1]).asInteger);
-				});
+				~renoise.sendMsgIn(timeNoteOn, "/renoise/trigger/note_on", instrument.asInteger, track.asInteger, (note[0]+note[1]).asInteger, velocity );
+				~renoise.sendMsgIn(timeNoteOff, "/renoise/trigger/note_off", instrument.asInteger, track.asInteger, (note[0]+note[1]).asInteger);
 			}
 		});
 	}
@@ -65,8 +58,7 @@ Renoise {
 	}
 
 	deinit {
-		this.editMode = false;
-		this.stop;
+		this.stopRecording;
 	}
 
 	makeDefault {
@@ -345,6 +337,12 @@ Renoise {
 		netAddr.sendMsg(*args);
 	}
 
+	sendMsgIn { arg latency ... args;
+		SystemClock.sched(latency ? 0, {
+			netAddr.sendMsg(*args);
+		});
+	}
+
 	// Evaluate a custom Lua expression,
 	evaluate { arg luaExpression;
 		netAddr.sendMsg("/renoise/evaluate", luaExpression);
@@ -363,6 +361,22 @@ Renoise {
 	// Stop playback
 	stop {
 		netAddr.sendMsg("/renoise/transport/stop");
+	}
+
+	record { arg duration, latency;
+		this.editMode = true;
+		this.sendMsgIn(latency ? (Server.default.latency-0.03), "/renoise/transport/start");
+		if (duration != nil) {
+			{
+				duration.wait;
+				this.stopRecording;
+			}.fork;
+		};
+	}
+
+	stopRecording {
+		this.editMode = false;
+		this.stop;
 	}
 
 	// Continue playback
@@ -520,7 +534,11 @@ Renoise {
 	// Solo track XXX
 	soloTrack { arg track;
 		netAddr.sendMsg("/renoise/song/track/" ++ track ++ "/solo");
-	}	
+	}
+
+	patternLength_ { arg numLines;
+		netAddr.sendMsg("/renoise/song/pattern/length", numLines);
+	}
 
 	// standard renoise messages that operate on devices
 
